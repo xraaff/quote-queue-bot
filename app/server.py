@@ -130,6 +130,12 @@ async def api_broadcasts(x_init_data: str = Header(default="")) -> dict:
     return {"broadcasts": await db.list_broadcasts()}
 
 
+@app.get("/api/users")
+async def api_users(x_init_data: str = Header(default="")) -> dict:
+    validate_admin(x_init_data)
+    return {"users": await db.list_users_with_stats()}
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}

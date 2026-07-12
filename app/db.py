@@ -244,6 +244,24 @@ async def list_users() -> list[dict]:
         return [dict(r) for r in await cur.fetchall()]
 
 
+USERS_WITH_STATS_SQL = """
+SELECT u.*,
+    (SELECT COUNT(*) FROM requests r WHERE r.user_id = u.user_id) AS requests_count,
+    (SELECT COUNT(*) FROM broadcast_receipts br
+     WHERE br.user_id = u.user_id AND br.status = 'supported') AS supported_count
+FROM users u ORDER BY u.last_seen DESC
+"""
+
+
+async def list_users_with_stats() -> list[dict]:
+    if USE_PG:
+        return [dict(r) for r in await _pool.fetch(USERS_WITH_STATS_SQL)]
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute(USERS_WITH_STATS_SQL)
+        return [dict(r) for r in await cur.fetchall()]
+
+
 async def create_broadcast(kind: str, url: str, note: str | None) -> dict:
     now = _now()
     if USE_PG:

@@ -78,6 +78,7 @@
 <div class="tabs" id="nav">
   <button class="tab active" data-view="queue">📥 Queue</button>
   <button class="tab" data-view="pushes">📣 Pushes</button>
+  <button class="tab" data-view="users">👥 Users</button>
 </div>
 
 <div id="queue-controls">
@@ -199,11 +200,34 @@ function pushCard(b) {
   </div>`;
 }
 
+function userCard(u) {
+  const parts = [];
+  if (u.requests_count) parts.push(`📥 ${u.requests_count} request${u.requests_count > 1 ? 's' : ''}`);
+  if (u.supported_count) parts.push(`✅ ${u.supported_count} push${u.supported_count > 1 ? 'es' : ''} supported`);
+  return `<div class="card">
+    <div class="meta">
+      <span class="user">${esc(userLabel(u))}</span>
+      <span>last seen ${fmtDate(u.last_seen)}</span>
+    </div>
+    ${u.username ? `<a href="https://t.me/${esc(u.username)}" target="_blank">@${esc(u.username)}</a>` : ''}
+    <div class="push-stats">${parts.join(' · ') || '— no activity yet'}</div>
+  </div>`;
+}
+
 async function load() {
   const list = document.getElementById('list');
   try {
+    if (state.view === 'users') {
+      const data = await api('/api/users');
+      document.getElementById('pending-badge').textContent = `${data.users.length} users`;
+      list.innerHTML = data.users.length
+        ? data.users.map(userCard).join('')
+        : '<div class="empty">Nobody pressed /start yet</div>';
+      return;
+    }
     if (state.view === 'pushes') {
       const data = await api('/api/broadcasts');
+      document.getElementById('pending-badge').textContent = `${data.broadcasts.length} pushes`;
       list.innerHTML = data.broadcasts.length
         ? data.broadcasts.map(pushCard).join('')
         : '<div class="empty">No pushes yet — hit 📣 New push in the bot chat</div>';
@@ -251,7 +275,8 @@ document.querySelectorAll('#nav .tab').forEach(el => el.onclick = () => {
   el.classList.add('active');
   state.view = el.dataset.view;
   document.getElementById('queue-controls').style.display = state.view === 'queue' ? '' : 'none';
-  document.getElementById('page-title').textContent = state.view === 'queue' ? 'Quote Queue' : 'Pushes';
+  document.getElementById('page-title').textContent =
+    { queue: 'Quote Queue', pushes: 'Pushes', users: 'Users' }[state.view];
   load();
 });
 document.querySelectorAll('#queue-controls .tab').forEach(el => el.onclick = () => {
