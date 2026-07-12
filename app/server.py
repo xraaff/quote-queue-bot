@@ -1,39 +1,75 @@
-"""FastAPI: отдаёт вебвью-дашборд, API для него и держит поллинг бота в фоне."""
+"""FastAPI: дашборд, API, приём апдейтов Telegram.
+
+Прод (WEBAPP_URL задан): webhook — входящее сообщение само будит уснувший
+бесплатный инстанс Render, а Telegram ретраит доставку, пока сервис просыпается.
+Локально (WEBAPP_URL пуст): обычный поллинг, публичный URL не нужен.
+"""
 
 import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from fastapi import FastAPI, Header, HTTPException
+from aiogram.types import Update
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import db
 from .bot import bot, dp, notify_user_done, setup_bot
-from .config import ADMIN_ID, BOT_TOKEN
+from .config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
+
+log = logging.getLogger(__name__)
 
 WEBAPP_HTML = Path(__file__).parent / "webapp" / "index.html"
 INIT_DATA_MAX_AGE = 24 * 3600
+# Секрет для проверки, что POST /webhook пришёл именно от Telegram
+WEBHOOK_SECRET = hashlib.sha256(f"webhook:{BOT_TOKEN}".encode()).hexdigest()[:32]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init()
     await setup_bot()
-    polling = asyncio.create_task(dp.start_polling(bot, handle_signals=False))
+    polling: asyncio.Task | None = None
+    if WEBAPP_URL:
+        await bot.set_webhook(
+            f"{WEBAPP_URL.rstrip('/')}/webhook",
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=False,
+        )
+        log.info("Webhook mode: %s/webhook", WEBAPP_URL)
+    else:
+        await bot.delete_webhook(drop_pending_updates=False)
+        polling = asyncio.create_task(dp.start_polling(bot, handle_signals=False))
+        log.info("Polling mode (local dev)")
     yield
-    polling.cancel()
-    with suppress(asyncio.CancelledError):
-        await polling
+    if polling:
+        polling.cancel()
+        with suppress(asyncio.CancelledError):
+            await polling
     await bot.session.close()
+    await db.close()
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/webhook")
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str = Header(default=""),
+) -> dict:
+    if not hmac.compare_digest(x_telegram_bot_api_secret_token, WEBHOOK_SECRET):
+        raise HTTPException(403, "Bad secret token")
+    update = Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
 
 def validate_admin(init_data: str) -> None:
