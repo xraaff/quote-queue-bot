@@ -101,29 +101,9 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data.startswith("pick:"))
-async def pick_kind(callback: CallbackQuery, state: FSMContext) -> None:
-    kind = callback.data.split(":", 1)[1]
-    await state.set_state(Submit.waiting_links)
-    await state.update_data(kind=kind)
-    if kind == "support":
-        prompt = ("Drop the link(s) to your quote tweet(s) — "
-                  "one message, multiple links are fine 👇")
-    else:
-        prompt = "Drop the link to your article (or several) 👇"
-    await callback.message.edit_text(f"{KIND_EMOJI[kind]} <b>{KIND_LABELS[kind]}</b>\n\n{prompt}")
-    await callback.answer()
-
-
-@router.message(Submit.waiting_links, F.text | F.caption)
-async def receive_links(message: Message, state: FSMContext) -> None:
-    urls = extract_urls(message.text or message.caption or "")
-    if not urls:
-        await message.answer("I don't see a link 🤔 Send it starting with http(s)://")
-        return
-    data = await state.get_data()
-    kind = data["kind"]
-    user = message.from_user
+async def file_links(kind: str, user, urls: list[str], reply_to: Message) -> None:
+    """Записывает ссылки в базу, шлёт эфир админу и подтверждение юзеру.
+    user передаётся явно: в callback'ах message.from_user — это бот, а не человек."""
     added, duplicates = [], 0
     for url in urls:
         row = await db.add_request(kind, user.id, user.username, user.first_name, url)
@@ -141,7 +121,39 @@ async def receive_links(message: Message, state: FSMContext) -> None:
     if duplicates:
         parts.append(f"↩️ {duplicates} already submitted earlier, skipped.")
     parts.append("You'll get a ping when it's done. Send more links or pick another option:")
-    await message.answer("\n".join(parts), reply_markup=main_menu_kb())
+    await reply_to.answer("\n".join(parts), reply_markup=main_menu_kb())
+
+
+@router.callback_query(F.data.startswith("pick:"))
+async def pick_kind(callback: CallbackQuery, state: FSMContext) -> None:
+    kind = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    pending_urls = data.get("pending_urls")
+    await state.set_state(Submit.waiting_links)
+    await state.update_data(kind=kind, pending_urls=None)
+    if pending_urls:
+        # ссылки прислали до выбора типа — записываем сразу, второй раз кидать не надо
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await file_links(kind, callback.from_user, pending_urls, callback.message)
+        await callback.answer("Saved ✅")
+        return
+    if kind == "support":
+        prompt = ("Drop the link(s) to your quote tweet(s) — "
+                  "one message, multiple links are fine 👇")
+    else:
+        prompt = "Drop the link to your article (or several) 👇"
+    await callback.message.edit_text(f"{KIND_EMOJI[kind]} <b>{KIND_LABELS[kind]}</b>\n\n{prompt}")
+    await callback.answer()
+
+
+@router.message(Submit.waiting_links, F.text | F.caption)
+async def receive_links(message: Message, state: FSMContext) -> None:
+    urls = extract_urls(message.text or message.caption or "")
+    if not urls:
+        await message.answer("I don't see a link 🤔 Send it starting with http(s)://")
+        return
+    data = await state.get_data()
+    await file_links(data["kind"], message.from_user, urls, message)
 
 
 # ---------- сторона админа ----------
@@ -226,6 +238,25 @@ async def admin_receive_quote_link(message: Message, state: FSMContext) -> None:
         return
     await notify_user_done(row)
     await message.answer(f"✅ #{row['id']} закрыта, юзер получил ссылку на квот.")
+
+
+# Catch-all: регистрируется ПОСЛЕДНИМ, ловит всё, что не поймали хендлеры выше.
+# Главная страховка от потери ссылок: юзер кинул ссылку, не нажав кнопку, —
+# запоминаем её и просим только выбрать тип, повторно кидать не нужно.
+@router.message(F.text | F.caption)
+async def catch_all(message: Message, state: FSMContext) -> None:
+    if message.from_user.id == ADMIN_ID:
+        await message.answer("Очередь и действия — в дашборде или через кнопки в эфире. /start — меню.")
+        return
+    urls = extract_urls(message.text or message.caption or "")
+    if urls:
+        await state.update_data(pending_urls=urls)
+        await message.answer(
+            f"Got your link{'s' if len(urls) > 1 else ''} 👌 What is it?",
+            reply_markup=main_menu_kb(),
+        )
+    else:
+        await message.answer("Pick what you want or just drop a link:", reply_markup=main_menu_kb())
 
 
 async def setup_bot() -> None:
