@@ -14,3 +14,5 @@ DB_PATH = os.environ.get("DB_PATH", "quotebot.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 # Имя, которое видят саппортеры в уведомлениях
 ADMIN_NAME = os.environ.get("ADMIN_NAME", "vanvster")
+# Единственная ссылка во всех пушах — профиль, пост находят органически
+PROFILE_URL = os.environ.get("PROFILE_URL", "https://x.com/vanvster")

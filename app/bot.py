@@ -22,7 +22,7 @@ from aiogram.types import (
 )
 
 from . import db
-from .config import ADMIN_ID, ADMIN_NAME, BOT_TOKEN, WEBAPP_URL
+from .config import ADMIN_ID, ADMIN_NAME, BOT_TOKEN, PROFILE_URL, WEBAPP_URL
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class AdminReply(StatesGroup):
 
 
 class AdminPush(StatesGroup):
-    waiting_link = State()
+    waiting_headline = State()
     confirm = State()
 
 
@@ -67,23 +67,24 @@ PUSH_HEADERS = {
 PUSH_KIND_WORD = {"quote": "quote", "article": "article"}
 
 
-def build_push_text(kind: str, note: str | None) -> str:
-    lines = [
+def build_push_text(kind: str, headline: str) -> str:
+    return "\n".join([
         PUSH_HEADERS[kind],
         "",
         f"<b>{ADMIN_NAME}</b> just published a new {PUSH_KIND_WORD[kind]} — go show it some love:",
         "❤️ Like  ·  🔖 Bookmark  ·  💬 Comment",
-    ]
-    if note:
-        lines += ["", html.escape(note)]
-    lines += ["", "When you're done — smash the button below 👇"]
-    return "\n".join(lines)
+        "",
+        f"📌 Headline of new {PUSH_KIND_WORD[kind]}:",
+        f"<b>«{html.escape(headline)}»</b>",
+        "",
+        "When you're done — smash the button below 👇",
+    ])
 
 
-def push_kb(broadcast_id: int, kind: str, url: str, supported: bool = False) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=f"🐦 Open the {PUSH_KIND_WORD[kind]}", url=url)]]
+def push_kb(broadcast_id: int, supported: bool = False) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text="👤 Open profile", url=PROFILE_URL)]]
     if not supported:
-        rows.append([InlineKeyboardButton(text="✅ I supported it", callback_data=f"bsup:{broadcast_id}:{kind}")])
+        rows.append([InlineKeyboardButton(text="✅ I supported it", callback_data=f"bsup:{broadcast_id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -299,38 +300,36 @@ async def push_pick_kind(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Not for you 😉", show_alert=True)
         return
     kind = callback.data.rsplit(":", 1)[1]
-    await state.set_state(AdminPush.waiting_link)
+    await state.set_state(AdminPush.waiting_headline)
     await state.update_data(push_kind=kind)
     await callback.message.edit_text(
-        f"{KIND_EMOJI['support' if kind == 'quote' else 'article']} Кинь ссылку на свой {PUSH_KIND_WORD[kind]}.\n"
-        "Можно добавить текст в том же сообщении — он попадёт в рассылку. /cancel — отмена."
+        f"{KIND_EMOJI['support' if kind == 'quote' else 'article']} "
+        f"Напиши заголовок твоего {PUSH_KIND_WORD[kind]} — он попадёт в рассылку. /cancel — отмена."
     )
     await callback.answer()
 
 
-@router.message(AdminPush.waiting_link, Command("cancel"))
+@router.message(AdminPush.waiting_headline, Command("cancel"))
 @router.message(AdminPush.confirm, Command("cancel"))
 async def push_cancel_cmd(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Ок, отменил.")
 
 
-@router.message(AdminPush.waiting_link, F.text)
-async def push_receive_link(message: Message, state: FSMContext) -> None:
-    urls = extract_urls(message.text)
-    if not urls:
-        await message.answer("Не вижу ссылки. Кинь http(s)://… или /cancel.")
+@router.message(AdminPush.waiting_headline, F.text)
+async def push_receive_headline(message: Message, state: FSMContext) -> None:
+    headline = message.text.strip()
+    if not headline or headline.startswith("/"):
+        await message.answer("Напиши текст заголовка или /cancel.")
         return
-    url = urls[0]
-    note = message.text.replace(url, "").strip() or None
     data = await state.get_data()
     kind = data["push_kind"]
     await state.set_state(AdminPush.confirm)
-    await state.update_data(push_url=url, push_note=note)
+    await state.update_data(push_headline=headline)
 
     recipients = [u for u in await db.list_users() if u["user_id"] != ADMIN_ID]
     # превью: ровно то, что увидят люди (id=0 — черновик, кнопка недействующая)
-    await message.answer(build_push_text(kind, note), reply_markup=push_kb(0, kind, url))
+    await message.answer(build_push_text(kind, headline), reply_markup=push_kb(0))
     await message.answer(
         f"☝️ Превью. Отправить <b>{len(recipients)}</b> людям?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
@@ -354,9 +353,9 @@ async def push_send(callback: CallbackQuery, state: FSMContext) -> None:
         return
     data = await state.get_data()
     await state.clear()
-    kind, url, note = data["push_kind"], data["push_url"], data.get("push_note")
-    broadcast = await db.create_broadcast(kind, url, note)
-    text = build_push_text(kind, note)
+    kind, headline = data["push_kind"], data["push_headline"]
+    broadcast = await db.create_broadcast(kind, PROFILE_URL, headline)
+    text = build_push_text(kind, headline)
 
     recipients = [u for u in await db.list_users() if u["user_id"] != ADMIN_ID]
     await callback.message.edit_text(f"📤 Рассылаю {len(recipients)} людям…")
@@ -364,7 +363,7 @@ async def push_send(callback: CallbackQuery, state: FSMContext) -> None:
     for u in recipients:
         try:
             await bot.send_message(u["user_id"], text,
-                                   reply_markup=push_kb(broadcast["id"], kind, url))
+                                   reply_markup=push_kb(broadcast["id"]))
             status = "sent"
             sent += 1
         except Exception:
@@ -383,17 +382,16 @@ async def push_send(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("bsup:"))
 async def push_supported(callback: CallbackQuery) -> None:
-    _, broadcast_id, kind = callback.data.split(":")
-    counted = await db.mark_supported(int(broadcast_id), callback.from_user.id)
+    # старые сообщения могут иметь формат bsup:{id}:{kind} — берём только id
+    broadcast_id = int(callback.data.split(":")[1])
+    counted = await db.mark_supported(broadcast_id, callback.from_user.id)
     if not counted:
         await callback.answer("Already counted ✅")
         return
     with suppress(Exception):
         await callback.message.edit_text(
             callback.message.html_text + "\n\n✅ <b>Thanks for the support! You're a legend 🙌</b>",
-            reply_markup=push_kb(int(broadcast_id), kind,
-                                 callback.message.reply_markup.inline_keyboard[0][0].url,
-                                 supported=True),
+            reply_markup=push_kb(broadcast_id, supported=True),
         )
     await callback.answer("Counted! Thank you 🙏")
 

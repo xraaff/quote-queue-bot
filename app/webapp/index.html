@@ -192,8 +192,7 @@ function pushCard(b) {
       <span>${PUSH_LABEL[b.kind]} #${b.id}</span>
       <span>${fmtDate(b.created_at)}</span>
     </div>
-    <a href="${esc(b.url)}" target="_blank">${esc(b.url)}</a>
-    ${b.note ? `<div style="margin-top:4px">${esc(b.note)}</div>` : ''}
+    ${b.note ? `<div class="user">«${esc(b.note)}»</div>` : `<a href="${esc(b.url)}" target="_blank">${esc(b.url)}</a>`}
     <div class="progress"><div style="width:${pct}%"></div></div>
     <div class="push-stats">✅ ${ok.length} / ${sent.length} supported${failed ? ` · 🚫 ${failed} unreachable` : ''}</div>
     <div class="people">${people}</div>
