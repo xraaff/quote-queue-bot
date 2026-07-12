@@ -124,6 +124,12 @@ async def api_done(request_id: int, body: DoneBody,
     return {"request": row}
 
 
+@app.get("/api/broadcasts")
+async def api_broadcasts(x_init_data: str = Header(default="")) -> dict:
+    validate_admin(x_init_data)
+    return {"broadcasts": await db.list_broadcasts()}
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
