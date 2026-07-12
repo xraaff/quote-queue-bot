@@ -328,10 +328,14 @@ async def push_receive_headline(message: Message, state: FSMContext) -> None:
     await state.update_data(push_headline=headline)
 
     recipients = [u for u in await db.list_users() if u["user_id"] != ADMIN_ID]
-    # превью: ровно то, что увидят люди (id=0 — черновик, кнопка недействующая)
-    await message.answer(build_push_text(kind, headline), reply_markup=push_kb(0))
+    # превью с явной пометкой, чтобы не путалось с настоящим пушем (id=0 — черновик)
     await message.answer(
-        f"☝️ Превью. Отправить <b>{len(recipients)}</b> людям?",
+        "👀 <i>Превью — это сообщение видишь только ты. Людям уйдёт всё, что ниже черты:</i>\n"
+        "➖➖➖➖➖➖➖➖➖➖\n\n" + build_push_text(kind, headline),
+        reply_markup=push_kb(0),
+    )
+    await message.answer(
+        f"Отправить <b>{len(recipients)}</b> людям?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text=f"🚀 Send to {len(recipients)}", callback_data="push:send"),
             InlineKeyboardButton(text="❌ Cancel", callback_data="push:cancel"),
