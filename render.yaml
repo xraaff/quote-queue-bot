@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: quotebot
+    runtime: python
+    plan: starter # нужен платный план: у free нет диска (SQLite сотрётся) и сервис засыпает (бот перестанет отвечать)
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    disk:
+      name: quotebot-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: ADMIN_NAME
+        value: vanvster
+      - key: DB_PATH
+        value: /var/data/quotebot.db
+      - key: PYTHON_VERSION
+        value: 3.12.7

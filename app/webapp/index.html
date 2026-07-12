@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Quote Queue</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #f4f4f5);
+    --card: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #18181b);
+    --hint: var(--tg-theme-hint-color, #71717a);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --link: var(--tg-theme-link-color, #2481cc);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font: 15px/1.45 -apple-system, system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 12px 12px 40px;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  header h1 { font-size: 18px; }
+  #pending-badge { color: var(--hint); font-size: 13px; }
+
+  .tabs, .chips { display: flex; gap: 8px; margin-bottom: 10px; }
+  .tab, .chip {
+    border: none; border-radius: 999px; padding: 7px 14px; font-size: 13px;
+    background: var(--card); color: var(--hint); cursor: pointer;
+  }
+  .tab.active, .chip.active { background: var(--accent); color: var(--accent-text); }
+
+  .card {
+    background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .card .meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--hint); margin-bottom: 6px; }
+  .card .kind-support { color: #16a34a; }
+  .card .kind-article { color: #d97706; }
+  .card .user { font-weight: 600; margin-bottom: 4px; }
+  .card a { color: var(--link); word-break: break-all; font-size: 14px; }
+  .card .actions { margin-top: 10px; display: flex; gap: 8px; }
+  .card input {
+    flex: 1; border: 1px solid var(--hint); border-radius: 10px; padding: 8px 10px;
+    font-size: 14px; background: var(--bg); color: var(--text); min-width: 0;
+  }
+  .btn {
+    border: none; border-radius: 10px; padding: 8px 14px; font-size: 14px; font-weight: 600;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .5; }
+  .done-note { margin-top: 8px; font-size: 13px; color: #16a34a; }
+
+  .empty { text-align: center; color: var(--hint); padding: 48px 0; }
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 12px;
+    font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw;
+  }
+  #toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Quote Queue</h1>
+  <span id="pending-badge"></span>
+</header>
+
+<div class="tabs">
+  <button class="tab active" data-status="pending">⏳ Pending</button>
+  <button class="tab" data-status="done">✅ Done</button>
+</div>
+<div class="chips">
+  <button class="chip active" data-kind="">All</button>
+  <button class="chip" data-kind="support">💬 Quotes</button>
+  <button class="chip" data-kind="article">📰 Articles</button>
+</div>
+
+<div id="list"><div class="empty">Loading…</div></div>
+<div id="toast"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+
+const state = { status: 'pending', kind: '' };
+const KIND_LABEL = { support: '💬 Support quote', article: '📰 Quote article' };
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', 'X-Init-Data': tg.initData, ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail || res.statusText;
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function userLabel(r) {
+  const name = r.first_name || '';
+  return r.username ? `${name} (@${r.username})`.trim() : (name || r.user_id);
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function card(r) {
+  const kindClass = r.kind === 'support' ? 'kind-support' : 'kind-article';
+  let actions = '';
+  if (r.status === 'pending') {
+    actions = r.kind === 'support'
+      ? `<div class="actions"><button class="btn" onclick="markDone(${r.id}, null, this)">✅ Supported</button></div>`
+      : `<div class="actions">
+           <input id="fu-${r.id}" type="url" placeholder="link to your quote tweet">
+           <button class="btn" onclick="markDoneArticle(${r.id}, this)">✅ Quoted</button>
+         </div>`;
+  } else {
+    const extra = r.kind === 'article' && r.fulfillment_url
+      ? ` · <a href="${esc(r.fulfillment_url)}" target="_blank">your quote</a>` : '';
+    actions = `<div class="done-note">✅ done ${fmtDate(r.done_at)}${extra}</div>`;
+  }
+  return `<div class="card">
+    <div class="meta">
+      <span class="${kindClass}">${KIND_LABEL[r.kind]} #${r.id}</span>
+      <span>${fmtDate(r.created_at)}</span>
+    </div>
+    <div class="user">${esc(userLabel(r))}</div>
+    <a href="${esc(r.url)}" target="_blank">${esc(r.url)}</a>
+    ${actions}
+  </div>`;
+}
+
+async function load() {
+  const list = document.getElementById('list');
+  try {
+    const params = new URLSearchParams({ status: state.status });
+    if (state.kind) params.set('kind', state.kind);
+    const data = await api('/api/requests?' + params);
+    document.getElementById('pending-badge').textContent = `${data.pending_count} pending`;
+    list.innerHTML = data.requests.length
+      ? data.requests.map(card).join('')
+      : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`;
+  } catch (e) {
+    list.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+async function markDone(id, fulfillmentUrl, btn) {
+  btn.disabled = true;
+  try {
+    await api(`/api/requests/${id}/done`, {
+      method: 'POST',
+      body: JSON.stringify({ fulfillment_url: fulfillmentUrl }),
+    });
+    tg.HapticFeedback?.notificationOccurred('success');
+    toast('Done — user notified ✅');
+    load();
+  } catch (e) {
+    btn.disabled = false;
+    toast('⚠️ ' + e.message);
+  }
+}
+
+function markDoneArticle(id, btn) {
+  const url = document.getElementById(`fu-${id}`).value.trim();
+  if (!/^https?:\/\//.test(url)) { toast('Paste the link to your quote tweet first'); return; }
+  markDone(id, url, btn);
+}
+
+document.querySelectorAll('.tab').forEach(el => el.onclick = () => {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  state.status = el.dataset.status;
+  load();
+});
+document.querySelectorAll('.chip').forEach(el => el.onclick = () => {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.kind = el.dataset.kind;
+  load();
+});
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
