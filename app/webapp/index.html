@@ -76,6 +76,11 @@
   <button class="chip" data-kind="support">💬 Quotes</button>
   <button class="chip" data-kind="article">📰 Articles</button>
 </div>
+<div class="chips">
+  <button class="chip active" data-date="">All time</button>
+  <button class="chip" data-date="today">Today</button>
+  <button class="chip" data-date="yesterday">Yesterday</button>
+</div>
 
 <div id="list"><div class="empty">Loading…</div></div>
 <div id="toast"></div>
@@ -84,7 +89,7 @@
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 
-const state = { status: 'pending', kind: '' };
+const state = { status: 'pending', kind: '', date: '' };
 const KIND_LABEL = { support: '💬 Support quote', article: '📰 Quote article' };
 
 function toast(msg) {
@@ -147,6 +152,17 @@ function card(r) {
   </div>`;
 }
 
+function inDay(iso, daysAgo) {
+  // границы дня — по локальному времени того, кто смотрит дашборд
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - daysAgo);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const d = new Date(iso);
+  return d >= start && d < end;
+}
+
 async function load() {
   const list = document.getElementById('list');
   try {
@@ -154,8 +170,11 @@ async function load() {
     if (state.kind) params.set('kind', state.kind);
     const data = await api('/api/requests?' + params);
     document.getElementById('pending-badge').textContent = `${data.pending_count} pending`;
-    list.innerHTML = data.requests.length
-      ? data.requests.map(card).join('')
+    let rows = data.requests;
+    if (state.date === 'today') rows = rows.filter(r => inDay(r.created_at, 0));
+    if (state.date === 'yesterday') rows = rows.filter(r => inDay(r.created_at, 1));
+    list.innerHTML = rows.length
+      ? rows.map(card).join('')
       : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`;
   } catch (e) {
     list.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
@@ -191,9 +210,11 @@ document.querySelectorAll('.tab').forEach(el => el.onclick = () => {
   load();
 });
 document.querySelectorAll('.chip').forEach(el => el.onclick = () => {
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  // active снимаем только внутри своего ряда, ряды фильтров независимы
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  state.kind = el.dataset.kind;
+  if (el.dataset.kind !== undefined) state.kind = el.dataset.kind;
+  if (el.dataset.date !== undefined) state.date = el.dataset.date;
   load();
 });
 
