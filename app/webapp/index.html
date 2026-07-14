@@ -24,8 +24,13 @@
     --purple-deep: #5c43bd;
     --serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
     --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    /* motion: быстро стартует, мягко тормозит; spring — с лёгким овершутом */
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  * { box-sizing: border-box; margin: 0; }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  button { user-select: none; -webkit-user-select: none; touch-action: manipulation; }
   body {
     font-family: var(--serif);
     background: var(--bg); color: var(--text);
@@ -38,56 +43,81 @@
   header h1 { font-family: var(--serif); font-size: 30px; font-weight: 600; line-height: 1.1; letter-spacing: -0.5px; }
   #pending-badge { font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: -0.24px; white-space: nowrap; }
 
-  /* ---- top nav: flat editorial tabs с акцентным подчёркиванием ---- */
+  /* ---- top nav: flat editorial tabs, подчёркивание едет через scaleX (GPU) ---- */
   #nav { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
   .nav-tab {
-    font-family: var(--sans); font-size: 15px; font-weight: 500; letter-spacing: -0.05px;
+    position: relative;
+    font-family: var(--sans); font-size: 15px; font-weight: 600; letter-spacing: -0.05px;
     border: none; background: none; cursor: pointer; color: var(--muted);
-    padding: 0 0 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: .15s;
+    padding: 0 0 12px; margin-bottom: -1px;
+    transition: color 120ms var(--ease);
   }
-  .nav-tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--purple); }
+  .nav-tab::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: var(--purple); border-radius: 2px;
+    transform: scaleX(0); transform-origin: center;
+    transition: transform 220ms var(--ease);
+  }
+  .nav-tab.active { color: var(--text); }
+  .nav-tab.active::after { transform: scaleX(1); }
 
   /* ---- queue controls ---- */
   #queue-controls { margin-bottom: 20px; }
   .seg {
-    display: flex; gap: 4px; background: var(--canvas-warm);
+    position: relative; display: flex; gap: 4px; background: var(--canvas-warm);
     border-radius: 999px; padding: 4px; margin-bottom: 12px;
   }
+  /* скользящая пилюля — единственное, что красится; едет на transform */
+  .seg-ind {
+    position: absolute; top: 4px; bottom: 4px; left: 4px;
+    width: calc(50% - 6px);
+    background: var(--purple); border-radius: 999px;
+    transition: transform 240ms var(--ease);
+    will-change: transform;
+  }
+  .seg.done .seg-ind { transform: translateX(calc(100% + 4px)); }
   .seg-btn {
+    position: relative; z-index: 1;
     flex: 1; font-family: var(--sans); font-size: 14px; font-weight: 600; letter-spacing: -0.1px;
     border: none; border-radius: 999px; padding: 10px; background: transparent;
-    color: var(--muted); cursor: pointer; transition: .15s;
+    color: var(--muted); cursor: pointer;
+    transition: color 180ms var(--ease);
   }
-  .seg-btn.active { background: var(--purple); color: #fff; }
+  .seg-btn.active { color: #fff; }
 
   .filters { display: flex; gap: 10px; }
   .filters select {
     flex: 1; font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--text); letter-spacing: -0.1px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    background-color: var(--card); border: 1px solid var(--border); border-radius: 12px;
     padding: 11px 34px 11px 14px; cursor: pointer; appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%2387867f' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 13px center;
+    transition: border-color 120ms var(--ease), background-color 120ms var(--ease);
   }
+  .filters select:focus { outline: none; border-color: var(--purple); }
 
   /* ---- buttons: filled с фирменным нижним скруглением ---- */
   .btn {
     font-family: var(--sans); font-weight: 600; font-size: 15px; letter-spacing: -0.1px;
     border: none; cursor: pointer; color: #fff; white-space: nowrap;
     background: var(--purple); padding: 11px 18px;
-    border-radius: 4px 4px 12px 12px; transition: background .15s, transform .05s;
+    border-radius: 4px 4px 12px 12px;
+    transition: background-color 120ms var(--ease), transform 90ms var(--ease), opacity 120ms var(--ease);
   }
-  .btn:active { transform: translateY(1px); }
+  .btn:active { transform: translateY(1px) scale(0.99); }
   .btn:disabled { opacity: .45; }
   .btn.clay { background: var(--clay); }
-  .btn.clay:hover { background: var(--clay-deep); }
-  .btn.purple:hover { background: var(--purple-deep); }
-  .btn.bulk { display: block; width: 100%; padding: 14px; margin-bottom: 9px; font-size: 15px; }
+  .btn.bulk { display: block; width: 100%; padding: 14px; margin-bottom: 9px; font-size: 15px; animation: rise 240ms var(--ease) backwards; }
+  .btn.bulk:nth-child(2) { animation-delay: 45ms; }
 
   /* ---- cards ---- */
   #bulk-bar { margin-bottom: 18px; }
   .card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 24px; padding: 22px; margin-bottom: 12px;
+    transition: transform 160ms var(--ease), border-color 160ms var(--ease);
+    animation: rise 260ms var(--ease) backwards;
+    animation-delay: min(calc(var(--i, 0) * 26ms), 210ms); /* стаггер, но хвост не ждёт вечность */
   }
   .card .meta {
     display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
@@ -98,12 +128,18 @@
   .kind-support { color: var(--purple); font-weight: 600; }
   .kind-article { color: var(--clay); font-weight: 600; }
   .card .user { font-family: var(--serif); font-size: 18px; font-weight: 600; line-height: 1.3; margin-bottom: 7px; }
-  .card a { font-family: var(--sans); font-size: 15px; color: var(--purple); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+  .card a {
+    font-family: var(--sans); font-size: 15px; color: var(--purple);
+    text-decoration: underline; text-underline-offset: 2px; word-break: break-all;
+    transition: color 100ms var(--ease);
+  }
   .card .actions { margin-top: 16px; display: flex; gap: 8px; }
   .card input {
     flex: 1; font-family: var(--sans); font-size: 15px; color: var(--text); min-width: 0;
     background: var(--bg); border: 1px solid var(--stone); border-radius: 10px; padding: 11px 12px;
+    transition: border-color 120ms var(--ease);
   }
+  .card input:focus { outline: none; border-color: var(--purple); }
   .card input::placeholder { color: var(--faint); }
   .done-note { margin-top: 12px; font-family: var(--sans); font-size: 14px; color: var(--clay-deep); }
 
@@ -111,7 +147,10 @@
   .progress { height: 6px; border-radius: 999px; background: var(--canvas-warm); margin: 12px 0; overflow: hidden; }
   .progress > div { height: 100%; border-radius: 999px; background: var(--clay); transition: width .3s; }
   .people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .person { font-family: var(--sans); font-size: 12px; padding: 5px 11px; border-radius: 999px; background: var(--canvas-warm); }
+  .person {
+    font-family: var(--sans); font-size: 12px; padding: 5px 11px; border-radius: 999px;
+    background: var(--canvas-warm); transition: background-color 120ms var(--ease);
+  }
   .person.yes { color: var(--clay-deep); font-weight: 600; }
   .person.no { color: var(--muted); }
   .push-stats { font-family: var(--sans); font-size: 13px; color: var(--muted); }
@@ -119,12 +158,41 @@
   /* ---- misc ---- */
   .empty { text-align: center; font-family: var(--serif); color: var(--muted); padding: 60px 0; font-size: 18px; }
   #toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translate(-50%, 12px) scale(0.97);
     font-family: var(--sans); font-size: 14px; background: var(--text); color: #fff;
-    padding: 12px 20px; border-radius: 12px; opacity: 0; transition: opacity .25s;
+    padding: 12px 20px; border-radius: 12px; opacity: 0;
+    transition: opacity 160ms var(--ease), transform 280ms var(--spring);
     pointer-events: none; max-width: 90vw; text-align: center;
+    will-change: transform, opacity;
   }
-  #toast.show { opacity: .97; }
+  #toast.show { opacity: .97; transform: translate(-50%, 0) scale(1); }
+
+  /* появление списков: только transform+opacity, ничего layout-ного */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .empty { animation: rise 200ms var(--ease) backwards; }
+
+  /* ховеры только там, где есть курсор — на тачах не липнут */
+  @media (hover: hover) {
+    .nav-tab:hover { color: var(--text); }
+    .seg-btn:not(.active):hover { color: var(--text); }
+    .filters select:hover { border-color: var(--stone); background-color: #ffffff; }
+    .btn:hover { background: var(--purple-deep); }
+    .btn.clay:hover { background: var(--clay-deep); }
+    .card:hover { transform: translateY(-2px); border-color: var(--stone); }
+    .card a:hover { color: var(--purple-deep); }
+    .person:hover { background: var(--oat); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -140,7 +208,8 @@
 </div>
 
 <div id="queue-controls">
-  <div class="seg">
+  <div class="seg" id="seg">
+    <div class="seg-ind"></div>
     <button class="seg-btn active" data-status="pending">⏳ Pending</button>
     <button class="seg-btn" data-status="done">✅ Done</button>
   </div>
@@ -211,7 +280,7 @@ function inDay(iso, daysAgo) {
   return d >= start && d < end;
 }
 
-function card(r) {
+function card(r, i) {
   const kindClass = r.kind === 'support' ? 'kind-support' : 'kind-article';
   let actions = '';
   if (r.status === 'pending') {
@@ -226,7 +295,7 @@ function card(r) {
       ? ` · <a href="${esc(r.fulfillment_url)}" target="_blank">your quote</a>` : '';
     actions = `<div class="done-note">✅ done ${fmtDate(r.done_at)}${extra}</div>`;
   }
-  return `<div class="card">
+  return `<div class="card" style="--i:${i || 0}">
     <div class="meta">
       <span class="${kindClass}">${KIND_LABEL[r.kind]} #${r.id}</span>
       <span>${fmtDate(r.created_at)}</span>
@@ -237,7 +306,7 @@ function card(r) {
   </div>`;
 }
 
-function pushCard(b) {
+function pushCard(b, i) {
   const ok = b.receipts.filter(r => r.status === 'supported');
   const sent = b.receipts.filter(r => r.status !== 'failed');
   const failed = b.receipts.length - sent.length;
@@ -245,7 +314,7 @@ function pushCard(b) {
   const people = sent.map(r =>
     `<span class="person ${r.status === 'supported' ? 'yes' : 'no'}">` +
     `${r.status === 'supported' ? '✅' : '⏳'} ${esc(userLabel(r))}</span>`).join('');
-  return `<div class="card">
+  return `<div class="card" style="--i:${i || 0}">
     <div class="meta">
       <span class="${b.kind === 'quote' ? 'kind-support' : 'kind-article'}">${PUSH_LABEL[b.kind]} #${b.id}</span>
       <span>${fmtDate(b.created_at)}</span>
@@ -257,11 +326,11 @@ function pushCard(b) {
   </div>`;
 }
 
-function userCard(u) {
+function userCard(u, i) {
   const parts = [];
   if (u.requests_count) parts.push(`📥 ${u.requests_count} request${u.requests_count > 1 ? 's' : ''}`);
   if (u.supported_count) parts.push(`✅ ${u.supported_count} push${u.supported_count > 1 ? 'es' : ''} supported`);
-  return `<div class="card">
+  return `<div class="card" style="--i:${i || 0}">
     <div class="meta">
       <span class="user" style="font-size:16px">${esc(userLabel(u))}</span>
       <span>last seen ${fmtDate(u.last_seen)}</span>
@@ -297,25 +366,33 @@ async function approveAll(ids, nArticles) {
   } catch (e) { toast('⚠️ ' + e.message); }
 }
 
+// Диф-рендер: DOM трогаем только когда контент реально изменился —
+// фоновый рефреш раз в 30 сек не перерисовывает список и не перезапускает анимации
+const rendered = {};
+function setHTML(id, html) {
+  if (rendered[id] === html) return;
+  rendered[id] = html;
+  document.getElementById(id).innerHTML = html;
+}
+
 async function load() {
-  const list = document.getElementById('list');
-  const bulkBar = document.getElementById('bulk-bar');
-  bulkBar.innerHTML = '';
   try {
     if (state.view === 'users') {
       const data = await api('/api/users');
       document.getElementById('pending-badge').textContent = `${data.users.length} users`;
-      list.innerHTML = data.users.length
+      setHTML('bulk-bar', '');
+      setHTML('list', data.users.length
         ? data.users.map(userCard).join('')
-        : '<div class="empty">Nobody pressed /start yet</div>';
+        : '<div class="empty">Nobody pressed /start yet</div>');
       return;
     }
     if (state.view === 'pushes') {
       const data = await api('/api/broadcasts');
       document.getElementById('pending-badge').textContent = `${data.broadcasts.length} pushes`;
-      list.innerHTML = data.broadcasts.length
+      setHTML('bulk-bar', '');
+      setHTML('list', data.broadcasts.length
         ? data.broadcasts.map(pushCard).join('')
-        : '<div class="empty">No pushes yet — hit 📣 New push in the bot chat</div>';
+        : '<div class="empty">No pushes yet — hit 📣 New push in the bot chat</div>');
       return;
     }
     const params = new URLSearchParams({ status: state.status });
@@ -325,10 +402,11 @@ async function load() {
     let rows = data.requests;
     if (state.date === 'today') rows = rows.filter(r => inDay(r.created_at, 0));
     if (state.date === 'yesterday') rows = rows.filter(r => inDay(r.created_at, 1));
-    list.innerHTML = rows.length
+    setHTML('list', rows.length
       ? rows.map(card).join('')
-      : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`;
+      : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`);
     // Кнопки действуют ровно на видимый (отфильтрованный) набор — и quotes, и articles
+    let bulkHtml = '';
     if (state.status === 'pending' && rows.length) {
       const ids = rows.map(r => r.id);
       const nS = rows.filter(r => r.kind === 'support').length;
@@ -337,12 +415,14 @@ async function load() {
       if (nA === 0) label = `Approve ${nS} quote${nS > 1 ? 's' : ''}`;
       else if (nS === 0) label = `Approve ${nA} article${nA > 1 ? 's' : ''}`;
       else label = `Approve all ${rows.length}`;
-      bulkBar.innerHTML =
+      bulkHtml =
         `<button class="btn bulk" onclick='openInBrowser(${JSON.stringify(ids)})'>🌐 Open all ${ids.length} in browser</button>` +
         `<button class="btn bulk clay" onclick='approveAll(${JSON.stringify(ids)}, ${nA})'>✅ ${label}</button>`;
     }
+    setHTML('bulk-bar', bulkHtml);
   } catch (e) {
-    list.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
+    setHTML('bulk-bar', '');
+    setHTML('list', `<div class="empty">⚠️ ${esc(e.message)}</div>`);
   }
 }
 
@@ -377,6 +457,7 @@ document.querySelectorAll('.seg-btn').forEach(el => el.onclick = () => {
   document.querySelectorAll('.seg-btn').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   state.status = el.dataset.status;
+  document.getElementById('seg').classList.toggle('done', state.status === 'done');
   load();
 });
 document.getElementById('f-kind').onchange = e => { state.kind = e.target.value; load(); };
