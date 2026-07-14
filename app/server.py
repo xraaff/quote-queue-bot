@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from . import db
 from .bot import bot, dp, notify_user_done, setup_bot
-from .config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
+from .config import ADMIN_ID, BOT_TOKEN, PROFILE_URL, WEBAPP_URL
 
 log = logging.getLogger(__name__)
 
@@ -196,22 +196,21 @@ async def open_pending_page(token: str = "") -> HTMLResponse:
 
 @app.post("/api/requests/approve")
 async def api_approve(body: IdsBody, x_init_data: str = Header(default="")) -> dict:
-    """Батч-апрув: помечает support-заявки done и шлёт каждому уведомление.
-    Артиклы пропускаем — им нужна индивидуальная ссылка на твой квот."""
+    """Батч-апрув: помечает заявки done и шлёт каждому уведомление по типу.
+    Support → «supported your quote». Article → «quoted your article» со ссылкой
+    на профиль (индивидуальную ссылку на квот в пачке подставить нельзя)."""
     validate_admin(x_init_data)
-    approved = skipped_articles = 0
+    approved = 0
     for rid in body.ids:
         existing = await db.get_request(rid)
         if existing is None or existing["status"] != "pending":
             continue
-        if existing["kind"] == "article":
-            skipped_articles += 1
-            continue
-        row = await db.mark_done(rid)
+        fulfillment = PROFILE_URL if existing["kind"] == "article" else None
+        row = await db.mark_done(rid, fulfillment_url=fulfillment)
         if row:
             await notify_user_done(row)
             approved += 1
-    return {"approved": approved, "skipped_articles": skipped_articles}
+    return {"approved": approved}
 
 
 @app.get("/health")

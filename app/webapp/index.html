@@ -7,84 +7,119 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
-    --bg: var(--tg-theme-bg-color, #f4f4f5);
-    --card: var(--tg-theme-secondary-bg-color, #ffffff);
-    --text: var(--tg-theme-text-color, #18181b);
-    --hint: var(--tg-theme-hint-color, #71717a);
-    --accent: var(--tg-theme-button-color, #2481cc);
-    --accent-text: var(--tg-theme-button-text-color, #ffffff);
-    --link: var(--tg-theme-link-color, #2481cc);
+    /* Anthropic-inspired палитра, но фон белый (по просьбе) */
+    --bg: #ffffff;
+    --card: #faf9f5;
+    --card-2: #f0eee6;
+    --text: #141413;
+    --muted: #87867f;
+    --faint: #b0aea5;
+    --border: #e7e5df;
+    --clay: #d97757;
+    --clay-deep: #c6613f;
+    --purple: #7358d6;
+    --purple-deep: #5c43bd;
+    --serif: Georgia, 'Times New Roman', Times, serif;
+    --sans: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; }
   body {
-    font: 15px/1.45 -apple-system, system-ui, sans-serif;
+    font-family: var(--serif);
     background: var(--bg); color: var(--text);
-    padding: 12px 12px 40px;
+    max-width: 640px; margin: 0 auto; padding: 16px 14px 48px;
+    -webkit-font-smoothing: antialiased;
   }
-  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
-  header h1 { font-size: 18px; }
-  #pending-badge { color: var(--hint); font-size: 13px; }
 
-  .tabs, .chips { display: flex; gap: 8px; margin-bottom: 10px; }
-  .chips { flex-wrap: wrap; }
-  .tab, .chip {
-    border: none; border-radius: 999px; padding: 7px 14px; font-size: 13px;
-    background: var(--card); color: var(--hint); cursor: pointer;
+  /* ---- header ---- */
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  header h1 { font-family: var(--serif); font-size: 27px; font-weight: 600; letter-spacing: -0.3px; }
+  #pending-badge { font-family: var(--sans); font-size: 12px; color: var(--muted); letter-spacing: -0.24px; }
+
+  /* ---- top nav ---- */
+  #nav { display: flex; gap: 6px; margin-bottom: 16px; }
+  .nav-tab {
+    font-family: var(--sans); font-size: 14px; font-weight: 500; letter-spacing: -0.1px;
+    border: 1px solid var(--border); border-radius: 999px; padding: 8px 15px;
+    background: var(--card); color: var(--muted); cursor: pointer; transition: .15s;
   }
-  .tab.active, .chip.active { background: var(--accent); color: var(--accent-text); }
+  .nav-tab.active { background: var(--purple); border-color: var(--purple); color: #fff; }
 
-  /* Панель фильтров очереди */
-  #queue-controls { margin-bottom: 14px; }
-  .seg { display: flex; gap: 4px; background: var(--card); border-radius: 999px; padding: 3px; margin-bottom: 12px; }
+  /* ---- queue controls ---- */
+  #queue-controls { margin-bottom: 16px; }
+  .seg {
+    display: flex; gap: 4px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px; margin-bottom: 10px;
+  }
   .seg-btn {
-    flex: 1; border: none; border-radius: 999px; padding: 9px; font-size: 14px; font-weight: 600;
-    background: transparent; color: var(--hint); cursor: pointer;
+    flex: 1; font-family: var(--sans); font-size: 14px; font-weight: 600; letter-spacing: -0.1px;
+    border: none; border-radius: 999px; padding: 9px; background: transparent;
+    color: var(--muted); cursor: pointer; transition: .15s;
   }
-  .seg-btn.active { background: var(--accent); color: var(--accent-text); }
-  .filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .filter-label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
-    color: var(--hint); width: 42px; flex-shrink: 0;
-  }
-  .filter-row .chips { margin-bottom: 0; flex: 1; }
+  .seg-btn.active { background: var(--purple); color: #fff; }
 
-  .card {
-    background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+  .filters { display: flex; gap: 8px; }
+  .filters select {
+    flex: 1; font-family: var(--sans); font-size: 14px; color: var(--text); letter-spacing: -0.1px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 32px 10px 12px; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%2387867f' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
   }
-  .card .meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--hint); margin-bottom: 6px; }
-  .card .kind-support { color: #16a34a; }
-  .card .kind-article { color: #d97706; }
-  .card .user { font-weight: 600; margin-bottom: 4px; }
-  .card a { color: var(--link); word-break: break-all; font-size: 14px; }
-  .card .actions { margin-top: 10px; display: flex; gap: 8px; }
-  .card input {
-    flex: 1; border: 1px solid var(--hint); border-radius: 10px; padding: 8px 10px;
-    font-size: 14px; background: var(--bg); color: var(--text); min-width: 0;
-  }
+
+  /* ---- buttons ---- */
   .btn {
-    border: none; border-radius: 10px; padding: 8px 14px; font-size: 14px; font-weight: 600;
-    background: var(--accent); color: var(--accent-text); cursor: pointer; white-space: nowrap;
+    font-family: var(--sans); font-weight: 600; font-size: 14px; letter-spacing: -0.1px;
+    border: none; cursor: pointer; color: #fff; white-space: nowrap;
+    background: var(--purple); padding: 9px 16px;
+    border-radius: 3px 3px 9px 9px; /* signature: top sharp, bottom rounded */
+    transition: .15s;
   }
-  .btn:disabled { opacity: .5; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; }
+  .btn.clay { background: var(--clay); }
+  .btn.clay:hover { background: var(--clay-deep); }
   .btn.bulk { display: block; width: 100%; padding: 13px; margin-bottom: 8px; font-size: 15px; }
-  .btn.approve { background: #16a34a; }
-  .done-note { margin-top: 8px; font-size: 13px; color: #16a34a; }
 
-  .empty { text-align: center; color: var(--hint); padding: 48px 0; }
+  /* ---- cards ---- */
+  #bulk-bar { margin-bottom: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px; margin-bottom: 10px;
+  }
+  .card .meta {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--sans); font-size: 12px; letter-spacing: -0.24px; color: var(--muted); margin-bottom: 8px;
+  }
+  .kind-support { color: var(--purple); font-weight: 600; }
+  .kind-article { color: var(--clay); font-weight: 600; }
+  .card .user { font-family: var(--serif); font-size: 18px; font-weight: 600; margin-bottom: 5px; }
+  .card a { font-family: var(--sans); font-size: 14px; color: var(--purple); text-decoration: underline; word-break: break-all; }
+  .card .actions { margin-top: 12px; display: flex; gap: 8px; }
+  .card input {
+    flex: 1; font-family: var(--sans); font-size: 14px; color: var(--text); min-width: 0;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+  }
+  .card input::placeholder { color: var(--faint); }
+  .done-note { margin-top: 10px; font-family: var(--sans); font-size: 13px; color: var(--clay-deep); }
 
-  .progress { height: 6px; border-radius: 3px; background: var(--bg); margin: 8px 0; overflow: hidden; }
-  .progress > div { height: 100%; border-radius: 3px; background: #16a34a; transition: width .3s; }
-  .people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .person { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--bg); }
-  .person.yes { color: #16a34a; }
-  .person.no { color: var(--hint); }
-  .push-stats { font-size: 13px; color: var(--hint); }
+  /* ---- pushes ---- */
+  .progress { height: 6px; border-radius: 999px; background: var(--card-2); margin: 10px 0; overflow: hidden; }
+  .progress > div { height: 100%; border-radius: 999px; background: var(--clay); transition: width .3s; }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .person { font-family: var(--sans); font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--card-2); }
+  .person.yes { color: var(--clay-deep); font-weight: 600; }
+  .person.no { color: var(--muted); }
+  .push-stats { font-family: var(--sans); font-size: 13px; color: var(--muted); }
+
+  /* ---- misc ---- */
+  .empty { text-align: center; font-family: var(--sans); color: var(--muted); padding: 52px 0; font-size: 15px; }
   #toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 12px;
-    font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw;
+    font-family: var(--sans); font-size: 14px; background: var(--text); color: #fff;
+    padding: 11px 18px; border-radius: 10px; opacity: 0; transition: opacity .25s;
+    pointer-events: none; max-width: 90vw; text-align: center;
   }
-  #toast.show { opacity: .95; }
+  #toast.show { opacity: .97; }
 </style>
 </head>
 <body>
@@ -93,10 +128,10 @@
   <span id="pending-badge"></span>
 </header>
 
-<div class="tabs" id="nav">
-  <button class="tab active" data-view="queue">📥 Queue</button>
-  <button class="tab" data-view="pushes">📣 Pushes</button>
-  <button class="tab" data-view="users">👥 Users</button>
+<div id="nav">
+  <button class="nav-tab active" data-view="queue">📥 Queue</button>
+  <button class="nav-tab" data-view="pushes">📣 Pushes</button>
+  <button class="nav-tab" data-view="users">👥 Users</button>
 </div>
 
 <div id="queue-controls">
@@ -104,21 +139,17 @@
     <button class="seg-btn active" data-status="pending">⏳ Pending</button>
     <button class="seg-btn" data-status="done">✅ Done</button>
   </div>
-  <div class="filter-row">
-    <span class="filter-label">Type</span>
-    <div class="chips">
-      <button class="chip active" data-kind="">All</button>
-      <button class="chip" data-kind="support">💬 Quotes</button>
-      <button class="chip" data-kind="article">📰 Articles</button>
-    </div>
-  </div>
-  <div class="filter-row">
-    <span class="filter-label">When</span>
-    <div class="chips">
-      <button class="chip active" data-date="">All</button>
-      <button class="chip" data-date="today">Today</button>
-      <button class="chip" data-date="yesterday">Yesterday</button>
-    </div>
+  <div class="filters">
+    <select id="f-kind">
+      <option value="">All types</option>
+      <option value="support">💬 Quotes</option>
+      <option value="article">📰 Articles</option>
+    </select>
+    <select id="f-date">
+      <option value="">All time</option>
+      <option value="today">Today</option>
+      <option value="yesterday">Yesterday</option>
+    </select>
   </div>
 </div>
 
@@ -138,7 +169,7 @@ function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2200);
+  setTimeout(() => el.classList.remove('show'), 2400);
 }
 
 async function api(path, options = {}) {
@@ -168,15 +199,22 @@ function fmtDate(iso) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function inDay(iso, daysAgo) {
+  const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - daysAgo);
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const d = new Date(iso);
+  return d >= start && d < end;
+}
+
 function card(r) {
   const kindClass = r.kind === 'support' ? 'kind-support' : 'kind-article';
   let actions = '';
   if (r.status === 'pending') {
     actions = r.kind === 'support'
-      ? `<div class="actions"><button class="btn" onclick="markDone(${r.id}, null, this)">✅ Supported</button></div>`
+      ? `<div class="actions"><button class="btn clay" onclick="markDone(${r.id}, null, this)">✅ Supported</button></div>`
       : `<div class="actions">
            <input id="fu-${r.id}" type="url" placeholder="link to your quote tweet">
-           <button class="btn" onclick="markDoneArticle(${r.id}, this)">✅ Quoted</button>
+           <button class="btn clay" onclick="markDoneArticle(${r.id}, this)">✅ Quoted</button>
          </div>`;
   } else {
     const extra = r.kind === 'article' && r.fulfillment_url
@@ -194,17 +232,6 @@ function card(r) {
   </div>`;
 }
 
-function inDay(iso, daysAgo) {
-  // границы дня — по локальному времени того, кто смотрит дашборд
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - daysAgo);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  const d = new Date(iso);
-  return d >= start && d < end;
-}
-
 function pushCard(b) {
   const ok = b.receipts.filter(r => r.status === 'supported');
   const sent = b.receipts.filter(r => r.status !== 'failed');
@@ -215,7 +242,7 @@ function pushCard(b) {
     `${r.status === 'supported' ? '✅' : '⏳'} ${esc(userLabel(r))}</span>`).join('');
   return `<div class="card">
     <div class="meta">
-      <span>${PUSH_LABEL[b.kind]} #${b.id}</span>
+      <span class="${b.kind === 'quote' ? 'kind-support' : 'kind-article'}">${PUSH_LABEL[b.kind]} #${b.id}</span>
       <span>${fmtDate(b.created_at)}</span>
     </div>
     ${b.note ? `<div class="user">«${esc(b.note)}»</div>` : `<a href="${esc(b.url)}" target="_blank">${esc(b.url)}</a>`}
@@ -231,21 +258,19 @@ function userCard(u) {
   if (u.supported_count) parts.push(`✅ ${u.supported_count} push${u.supported_count > 1 ? 'es' : ''} supported`);
   return `<div class="card">
     <div class="meta">
-      <span class="user">${esc(userLabel(u))}</span>
+      <span class="user" style="font-size:16px">${esc(userLabel(u))}</span>
       <span>last seen ${fmtDate(u.last_seen)}</span>
     </div>
     ${u.username ? `<a href="https://t.me/${esc(u.username)}" target="_blank">@${esc(u.username)}</a>` : ''}
-    <div class="push-stats">${parts.join(' · ') || '— no activity yet'}</div>
+    <div class="push-stats" style="margin-top:6px">${parts.join(' · ') || '— no activity yet'}</div>
   </div>`;
 }
 
 async function openInBrowser(ids) {
   try {
     const { url } = await api('/api/open-token', { method: 'POST', body: JSON.stringify({ ids }) });
-    tg.openLink(url);  // открывает страницу-хендофф во внешнем браузере (Arc)
-  } catch (e) {
-    toast('⚠️ ' + e.message);
-  }
+    tg.openLink(url);
+  } catch (e) { toast('⚠️ ' + e.message); }
 }
 
 function askConfirm(msg) {
@@ -255,18 +280,16 @@ function askConfirm(msg) {
   });
 }
 
-async function approveAll(ids) {
-  if (!(await askConfirm(`Approve ${ids.length} quote(s) and notify everyone?`))) return;
+async function approveAll(ids, nArticles) {
+  let msg = `Approve ${ids.length} and notify everyone?`;
+  if (nArticles) msg += `\n${nArticles} article(s) will link to your profile.`;
+  if (!(await askConfirm(msg))) return;
   try {
     const r = await api('/api/requests/approve', { method: 'POST', body: JSON.stringify({ ids }) });
     tg.HapticFeedback?.notificationOccurred('success');
-    let msg = `✅ Approved ${r.approved}, everyone notified`;
-    if (r.skipped_articles) msg += ` · ${r.skipped_articles} article(s) need a quote link`;
-    toast(msg);
+    toast(`✅ Approved ${r.approved}, everyone notified`);
     load();
-  } catch (e) {
-    toast('⚠️ ' + e.message);
-  }
+  } catch (e) { toast('⚠️ ' + e.message); }
 }
 
 async function load() {
@@ -300,17 +323,18 @@ async function load() {
     list.innerHTML = rows.length
       ? rows.map(card).join('')
       : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`;
-    // Кнопки действуют ровно на то, что видно с учётом фильтров
+    // Кнопки действуют ровно на видимый (отфильтрованный) набор — и quotes, и articles
     if (state.status === 'pending' && rows.length) {
-      const openIds = rows.map(r => r.id);
-      const quoteIds = rows.filter(r => r.kind === 'support').map(r => r.id);
-      let html = `<button class="btn bulk" onclick='openInBrowser(${JSON.stringify(openIds)})'>` +
-        `🌐 Open all ${openIds.length} in browser</button>`;
-      if (quoteIds.length) {
-        html += `<button class="btn bulk approve" onclick='approveAll(${JSON.stringify(quoteIds)})'>` +
-          `✅ Approve ${quoteIds.length} quote${quoteIds.length > 1 ? 's' : ''}</button>`;
-      }
-      bulkBar.innerHTML = html;
+      const ids = rows.map(r => r.id);
+      const nS = rows.filter(r => r.kind === 'support').length;
+      const nA = rows.length - nS;
+      let label;
+      if (nA === 0) label = `Approve ${nS} quote${nS > 1 ? 's' : ''}`;
+      else if (nS === 0) label = `Approve ${nA} article${nA > 1 ? 's' : ''}`;
+      else label = `Approve all ${rows.length}`;
+      bulkBar.innerHTML =
+        `<button class="btn bulk" onclick='openInBrowser(${JSON.stringify(ids)})'>🌐 Open all ${ids.length} in browser</button>` +
+        `<button class="btn bulk clay" onclick='approveAll(${JSON.stringify(ids)}, ${nA})'>✅ ${label}</button>`;
     }
   } catch (e) {
     list.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
@@ -321,16 +345,12 @@ async function markDone(id, fulfillmentUrl, btn) {
   btn.disabled = true;
   try {
     await api(`/api/requests/${id}/done`, {
-      method: 'POST',
-      body: JSON.stringify({ fulfillment_url: fulfillmentUrl }),
+      method: 'POST', body: JSON.stringify({ fulfillment_url: fulfillmentUrl }),
     });
     tg.HapticFeedback?.notificationOccurred('success');
     toast('Done — user notified ✅');
     load();
-  } catch (e) {
-    btn.disabled = false;
-    toast('⚠️ ' + e.message);
-  }
+  } catch (e) { btn.disabled = false; toast('⚠️ ' + e.message); }
 }
 
 function markDoneArticle(id, btn) {
@@ -339,8 +359,8 @@ function markDoneArticle(id, btn) {
   markDone(id, url, btn);
 }
 
-document.querySelectorAll('#nav .tab').forEach(el => el.onclick = () => {
-  document.querySelectorAll('#nav .tab').forEach(t => t.classList.remove('active'));
+document.querySelectorAll('#nav .nav-tab').forEach(el => el.onclick = () => {
+  document.querySelectorAll('#nav .nav-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   state.view = el.dataset.view;
   document.getElementById('queue-controls').style.display = state.view === 'queue' ? '' : 'none';
@@ -354,14 +374,8 @@ document.querySelectorAll('.seg-btn').forEach(el => el.onclick = () => {
   state.status = el.dataset.status;
   load();
 });
-document.querySelectorAll('.chip').forEach(el => el.onclick = () => {
-  // active снимаем только внутри своего ряда, ряды фильтров независимы
-  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  if (el.dataset.kind !== undefined) state.kind = el.dataset.kind;
-  if (el.dataset.date !== undefined) state.date = el.dataset.date;
-  load();
-});
+document.getElementById('f-kind').onchange = e => { state.kind = e.target.value; load(); };
+document.getElementById('f-date').onchange = e => { state.date = e.target.value; load(); };
 
 load();
 setInterval(load, 30000);
