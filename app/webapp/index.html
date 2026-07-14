@@ -50,6 +50,7 @@
     background: var(--accent); color: var(--accent-text); cursor: pointer; white-space: nowrap;
   }
   .btn:disabled { opacity: .5; }
+  .btn.bulk { display: block; width: 100%; padding: 12px; margin-bottom: 12px; }
   .done-note { margin-top: 8px; font-size: 13px; color: #16a34a; }
 
   .empty { text-align: center; color: var(--hint); padding: 48px 0; }
@@ -98,6 +99,7 @@
   </div>
 </div>
 
+<div id="bulk-bar"></div>
 <div id="list"><div class="empty">Loading…</div></div>
 <div id="toast"></div>
 
@@ -214,8 +216,19 @@ function userCard(u) {
   </div>`;
 }
 
+async function openInBrowser() {
+  try {
+    const { url } = await api('/api/open-token', { method: 'POST', body: '{}' });
+    tg.openLink(url);  // открывает страницу-хендофф во внешнем браузере (Arc)
+  } catch (e) {
+    toast('⚠️ ' + e.message);
+  }
+}
+
 async function load() {
   const list = document.getElementById('list');
+  const bulkBar = document.getElementById('bulk-bar');
+  bulkBar.innerHTML = '';
   try {
     if (state.view === 'users') {
       const data = await api('/api/users');
@@ -243,6 +256,11 @@ async function load() {
     list.innerHTML = rows.length
       ? rows.map(card).join('')
       : `<div class="empty">${state.status === 'pending' ? 'All clear 🎉' : 'Nothing here yet'}</div>`;
+    // «Open all in browser» открывает ВСЕ pending (не зависит от фильтров) — подпись по pending_count
+    if (state.status === 'pending' && data.pending_count) {
+      bulkBar.innerHTML =
+        `<button class="btn bulk" onclick="openInBrowser()">🌐 Open all ${data.pending_count} pending in browser</button>`;
+    }
   } catch (e) {
     list.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
   }
