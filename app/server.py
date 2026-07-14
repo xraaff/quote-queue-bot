@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -35,19 +36,31 @@ OPEN_SECRET = hashlib.sha256(f"open:{BOT_TOKEN}".encode()).digest()
 OPEN_TOKEN_TTL = 600  # 10 минут
 
 
-def make_open_token() -> str:
-    exp = str(int(time.time()) + OPEN_TOKEN_TTL)
-    sig = hmac.new(OPEN_SECRET, exp.encode(), hashlib.sha256).hexdigest()
-    return f"{exp}.{sig}"
+def make_open_token(ids: list[int]) -> str:
+    """Токен несёт конкретный список id (ровно то, что видно в дашборде) + срок жизни."""
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"ids": ids, "exp": int(time.time()) + OPEN_TOKEN_TTL}).encode()
+    ).decode()
+    sig = hmac.new(OPEN_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
 
 
-def verify_open_token(token: str) -> bool:
+def read_open_token(token: str) -> list[int] | None:
+    """Возвращает список id из валидного непросроченного токена, иначе None."""
     try:
-        exp, sig = token.split(".", 1)
+        payload, sig = token.split(".", 1)
     except (ValueError, AttributeError):
-        return False
-    expected = hmac.new(OPEN_SECRET, exp.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig) and time.time() < int(exp)
+        return None
+    expected = hmac.new(OPEN_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        return None
+    try:
+        data = json.loads(base64.urlsafe_b64decode(payload.encode()))
+    except Exception:
+        return None
+    if time.time() >= data.get("exp", 0):
+        return None
+    return [int(i) for i in data.get("ids", [])]
 
 
 @asynccontextmanager
@@ -154,25 +167,51 @@ async def api_users(x_init_data: str = Header(default="")) -> dict:
     return {"users": await db.list_users_with_stats()}
 
 
+class IdsBody(BaseModel):
+    ids: list[int]
+
+
 @app.post("/api/open-token")
-async def api_open_token(x_init_data: str = Header(default="")) -> dict:
-    """Дашборд (внутри Telegram) минтит токен, отдаёт ссылку на /open для внешнего браузера."""
+async def api_open_token(body: IdsBody, x_init_data: str = Header(default="")) -> dict:
+    """Дашборд (внутри Telegram) минтит токен на конкретные id, отдаёт ссылку на /open."""
     validate_admin(x_init_data)
     base = WEBAPP_URL.rstrip("/")
-    return {"url": f"{base}/open?token={make_open_token()}"}
+    return {"url": f"{base}/open?token={make_open_token(body.ids)}"}
 
 
 @app.get("/open", response_class=HTMLResponse)
 async def open_pending_page(token: str = "") -> HTMLResponse:
-    """Страница-хендофф: открывается в Arc, одним кликом раскрывает все pending вкладками."""
-    if not verify_open_token(token):
+    """Страница-хендофф: открывается в Arc, одним кликом раскрывает выбранные ссылки вкладками."""
+    ids = read_open_token(token)
+    if ids is None:
         return HTMLResponse(
             "<h2 style='font:16px system-ui;padding:24px'>Link expired — "
             "reopen it from the dashboard.</h2>", status_code=403)
-    rows = await db.list_requests(status="pending")
-    urls = [r["url"] for r in rows]
+    # берём только те, что всё ещё pending, в порядке из токена
+    by_id = {r["id"]: r for r in await db.list_requests(status="pending")}
+    urls = [by_id[i]["url"] for i in ids if i in by_id]
     page = OPEN_PAGE_HTML.replace("__URLS_JSON__", json.dumps(urls))
     return HTMLResponse(page)
+
+
+@app.post("/api/requests/approve")
+async def api_approve(body: IdsBody, x_init_data: str = Header(default="")) -> dict:
+    """Батч-апрув: помечает support-заявки done и шлёт каждому уведомление.
+    Артиклы пропускаем — им нужна индивидуальная ссылка на твой квот."""
+    validate_admin(x_init_data)
+    approved = skipped_articles = 0
+    for rid in body.ids:
+        existing = await db.get_request(rid)
+        if existing is None or existing["status"] != "pending":
+            continue
+        if existing["kind"] == "article":
+            skipped_articles += 1
+            continue
+        row = await db.mark_done(rid)
+        if row:
+            await notify_user_done(row)
+            approved += 1
+    return {"approved": approved, "skipped_articles": skipped_articles}
 
 
 @app.get("/health")
@@ -217,13 +256,23 @@ OPEN_PAGE_HTML = """<!doctype html>
     document.getElementById('status').textContent = 'Nothing pending 🎉';
   }
   function openAll() {
-    let blocked = 0;
-    urls.forEach(u => { if (!window.open(u, '_blank')) blocked++; });
-    if (blocked > 0) {
-      document.getElementById('hint').style.display = 'block';
-    } else {
-      document.getElementById('status').textContent = `Opened ${urls.length} tab(s) ✅`;
-    }
+    // Arc глотает пачку синхронных window.open — открываем по одной со сдвигом.
+    // Первая идёт синхронно (в жесте клика), остальные с задержкой.
+    const btn = document.getElementById('go');
+    btn.disabled = true;
+    let opened = 0, blocked = 0, done = 0;
+    const status = document.getElementById('status');
+    urls.forEach((u, i) => {
+      setTimeout(() => {
+        if (window.open(u, '_blank')) opened++; else blocked++;
+        done++;
+        status.textContent = `Opened ${opened}/${urls.length}` + (blocked ? ` · ${blocked} blocked` : '');
+        if (done === urls.length) {
+          btn.disabled = false;
+          if (blocked) document.getElementById('hint').style.display = 'block';
+        }
+      }, i * 400);
+    });
   }
 </script>
 </body></html>"""
